@@ -1,0 +1,53 @@
+import cv2
+import numpy as np
+from threading import Thread
+from queue import Queue
+classNames = { 0: 'background',
+    1: 'aeroplane', 2: 'bicycle', 3: 'bird', 4: 'boat',
+    5: 'bottle', 6: 'bus', 7: 'car', 8: 'cat', 9: 'chair',
+    10: 'cow', 11: 'diningtable', 12: 'dog', 13: 'horse',
+    14: 'motorbike', 15: 'person', 16: 'pottedplant',
+    17: 'sheep', 18: 'sofa', 19: 'train', 20: 'tvmonitor' }
+def net_forward(inp_qq, op_q):
+    while(True):
+
+        image = inp_qq.get()
+        (h,w) = image.shape[:2]
+        resized_image = cv2.UMat(cv2.resize(image,(300,300)))
+        blob = cv2.dnn.blobFromImage(resized_image, 0.00783, (300,300), (0,0,0), False)
+        blob_umat = cv2.UMat(blob)
+        net.setInput(blob_umat)
+        detections = net.forward();
+        print(detections)
+        for i in np.arange(0 , detections.shape[2]):
+            confidence = detections[0,0,i,2]
+            if confidence>= 0.2:
+                label = classNames[detections[0,0,i,1]]
+                box  = detections[0,0,i,3:7]*np.array([w,h,w,h])
+                (startx,startY,endx,endy) = box.astype(int)
+                cv2.rectangle(image,(startx,startY),(endx,endy),(0,0,255),3)
+                cv2.imshow('final',image)
+                if cv2.waitKey(1)>=0:
+                    break
+
+
+    print('waiting for the image...')
+
+net = cv2.dnn.readNetFromCaffe(prototxt= 'MobileNetSSD_deploy.prototxt', caffeModel= 'MobileNetSSD_deploy.caffemodel' )
+print('Sucessfully Loaded the network...')
+inp_q = Queue(2)
+op_q = Queue()
+
+t1 = Thread(target = net_forward, args=(inp_q,op_q))
+t1.daemon = True
+t1.start()
+print('testing')
+video_frame = cv2.VideoCapture(0)
+while(True):
+    ret,frame = video_frame.read()
+    cv2.imshow('frame',frame)
+    inp_q.put(frame)
+    if cv2.waitKey(1)>=0:
+        cv2.destroyAllWindows()
+        break
+video_frame.release()
